@@ -15,7 +15,7 @@ namespace BackupTool
     {
         private static readonly string CurrentVersion = typeof(MainForm).Assembly.GetName().Version?.ToString() ?? "0.0.0";
         private static readonly string DisplayVersion = FormatVersion(CurrentVersion);
-        private const string UpdateInfoUrl = "http://localhost:3001/tools/backuptool/download/version.json";
+        private const string UpdateInfoUrl = "https://raw.githubusercontent.com/froessel01/DIS-IS-BackupTool/main/release/version.json";
         private string _logFile = string.Empty;
         private string _backupRootPath = string.Empty;
         private string _backupPath = string.Empty;
@@ -785,5 +785,6 @@ namespace BackupTool
 
     }
 }
+
 
 
