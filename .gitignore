@@ -1,0 +1,15 @@
+﻿# Build outputs
+bin/
+obj/
+exe/
+# Logs
+logs/
+*.log
+# User-specific / IDE
+.vs/
+.vscode/*.log
+# OS files
+Thumbs.db
+.DS_Store
+# Node
+node_modules/
