@@ -1,0 +1,21 @@
+﻿{
+  "BackupRootPath": "D:\\Backups",
+  "ProgramsToBackup": [
+    {
+      "Name": "BeispielApp",
+      "Path": "%APPDATA%\\BeispielApp",
+      "Type": "Selective",
+      "Items": [
+        "config.json",
+        "profiles\\*",
+        "data\\*.db"
+      ]
+    },
+    {
+      "Name": "AndereApp",
+      "Path": "C:\\ProgramData\\AndereApp",
+      "Type": "Full",
+      "Items": []
+    }
+  ]
+}

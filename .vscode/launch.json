@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": ".NET Launch (TestApp)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "dotnet: build",
+      "program": "${workspaceFolder}/TestApp/bin/Debug/net7.0-windows/TestApp.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}/TestApp",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}
