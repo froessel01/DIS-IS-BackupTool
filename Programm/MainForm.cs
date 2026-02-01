@@ -26,6 +26,10 @@ namespace BackupTool
         private bool _isBackupMode = true;
         private int _currentStep = 0;
         private readonly Dictionary<string, bool> _programSelection = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, bool> _restoreProgramSelection = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ProgramEntry> _restoreFolderMap = new(StringComparer.OrdinalIgnoreCase);
+        private string _selectedRestoreZip = string.Empty;
+        private BackupConfig? _restoreConfig;
         private Color _accentColor = Color.FromArgb(140, 92, 255);
         private Color _cardBorderColor = Color.FromArgb(52, 54, 62);
         private Color _textColor = Color.FromArgb(230, 230, 235);
@@ -79,8 +83,7 @@ namespace BackupTool
         {
             if (!_isBackupMode)
             {
-                WriteLog("Restore-Modus ist noch nicht implementiert.", "WARNING");
-                ShowError("Restore-Modus ist noch nicht implementiert.");
+                RunRestore();
                 return;
             }
 
@@ -143,6 +146,89 @@ namespace BackupTool
 
             WriteSummary(result.SuccessCount, result.TotalPrograms, result.FailedPrograms);
             UpdateActionButtons();
+        }
+
+        private void RunRestore()
+        {
+            var logsDir = Path.Combine(_baseDir, "logs");
+            Directory.CreateDirectory(logsDir);
+            _logFile = Path.Combine(logsDir, $"restore_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+
+            LogBanner();
+            WriteLog("=== Restore-Prozess gestartet ===", "INFO");
+
+            if (!File.Exists(_configPath))
+            {
+                WriteLog("FEHLER: config.json nicht gefunden!", "ERROR");
+                WriteLog($"Pfad: {_configPath}", "ERROR");
+                ShowError("config.json nicht gefunden. Bitte erstelle die Datei oder verwende die Vorlage.");
+                return;
+            }
+
+            var config = _restoreConfig;
+            if (config == null)
+            {
+                if (!ConfigLoader.TryLoad(_configPath, out var loadedConfig, out var errorMessage))
+                {
+                    WriteLog($"FEHLER beim Laden der Konfiguration: {errorMessage}", "ERROR");
+                    WriteLog($"Datei: {_configPath}", "ERROR");
+                    ShowError("Fehler beim Laden der Konfiguration.");
+                    return;
+                }
+                config = loadedConfig;
+            }
+
+            if (string.IsNullOrWhiteSpace(_selectedRestoreZip) || !File.Exists(_selectedRestoreZip))
+            {
+                WriteLog("FEHLER: Kein Backup-ZIP ausgewählt.", "ERROR");
+                ShowError("Bitte wähle zuerst ein Backup-ZIP aus.");
+                return;
+            }
+
+            var selections = GetSelectedRestorePrograms();
+            if (selections.Count == 0)
+            {
+                WriteLog("FEHLER: Kein Programm für Restore ausgewählt.", "ERROR");
+                ShowError("Kein Programm für Restore ausgewählt.");
+                return;
+            }
+
+            var warning = "Beim Restore werden Dateien auf deinem PC überschrieben.\n\n" +
+                          (checkBoxRestoreBackupBefore.Checked
+                              ? "Vorher wird ein Backup der aktuellen Daten erstellt."
+                              : "Es wird kein Backup der aktuellen Daten erstellt.");
+
+            var confirm = MessageBox.Show(this, warning, "Restore bestätigen", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (confirm != DialogResult.Yes)
+            {
+                WriteLog("Restore abgebrochen.", "WARNING");
+                return;
+            }
+
+            var result = RestoreEngine.Run(
+                config,
+                selections,
+                _selectedRestoreZip,
+                checkBoxRestoreBackupBefore.Checked,
+                WriteLog,
+                SetProgressMaximum,
+                IncrementProgress);
+
+            _backupRootPath = Environment.ExpandEnvironmentVariables(config.BackupRootPath ?? _backupRootPath);
+            _zipPath = _selectedRestoreZip;
+
+            if (result.Aborted)
+            {
+                ResetProgress();
+                ShowError("Restore abgebrochen, weil ein Fehler aufgetreten ist.");
+                WriteRestoreSummary(result.SuccessCount, result.TotalPrograms, result.FailedPrograms, result.PreBackupPath, result.PreBackupZipPath);
+                BeginInvoke(new Action(LoadRestoreBackups));
+                return;
+            }
+
+            WriteRestoreSummary(result.SuccessCount, result.TotalPrograms, result.FailedPrograms, result.PreBackupPath, result.PreBackupZipPath);
+            UpdateActionButtons();
+            BeginInvoke(new Action(LoadRestoreBackups));
         }
 
         private void LogBanner()
@@ -357,7 +443,6 @@ namespace BackupTool
         private void buttonModeRestore_Click(object sender, EventArgs e)
         {
             SetMode(false);
-            ShowError("Restore-Modus ist noch nicht implementiert.");
         }
 
         private void buttonSelectAll_Click(object sender, EventArgs e)
@@ -389,7 +474,7 @@ namespace BackupTool
                 return;
             }
 
-            buttonBackup.Enabled = _isBackupMode;
+            buttonBackup.Enabled = true;
             buttonBackup.Visible = _currentStep == 2;
             buttonBack.Enabled = _currentStep > 0;
             buttonNext.Enabled = _currentStep < 2;
@@ -417,13 +502,27 @@ namespace BackupTool
                 flowPrograms.Visible = true;
                 buttonSelectAll.Visible = true;
                 labelRestorePlaceholder.Visible = false;
+                labelRestoreBackups.Visible = false;
+                listBoxRestoreBackups.Visible = false;
+                labelRestorePrograms.Visible = false;
+                flowRestorePrograms.Visible = false;
+                buttonRestoreSelectAll.Visible = false;
+                checkBoxRestoreBackupBefore.Visible = false;
+                labelRestoreWarning.Visible = false;
             }
             else
             {
                 labelPrograms.Visible = false;
                 flowPrograms.Visible = false;
                 buttonSelectAll.Visible = false;
-                labelRestorePlaceholder.Visible = true;
+                labelRestorePlaceholder.Visible = false;
+                labelRestoreBackups.Visible = true;
+                listBoxRestoreBackups.Visible = true;
+                labelRestorePrograms.Visible = true;
+                flowRestorePrograms.Visible = true;
+                buttonRestoreSelectAll.Visible = true;
+                checkBoxRestoreBackupBefore.Visible = true;
+                labelRestoreWarning.Visible = true;
             }
         }
 
@@ -543,6 +642,9 @@ namespace BackupTool
             panelStep3.BackColor = card;
             panelMode.BackColor = card;
             flowPrograms.BackColor = logBg;
+            flowRestorePrograms.BackColor = logBg;
+            listBoxRestoreBackups.BackColor = Color.FromArgb(30, 32, 38);
+            listBoxRestoreBackups.ForeColor = text;
 
             ApplyPanelStyle(panelBanner, bannerBorder, 6);
             ApplyPanelStyle(panelHeader, cardBorder, 6);
@@ -567,7 +669,11 @@ namespace BackupTool
             labelMode.ForeColor = subtle;
             labelPrograms.ForeColor = subtle;
             labelRestorePlaceholder.ForeColor = subtle;
+            labelRestoreBackups.ForeColor = subtle;
+            labelRestorePrograms.ForeColor = subtle;
+            labelRestoreWarning.ForeColor = Color.FromArgb(255, 193, 7);
             checkBoxAutoUpdate.ForeColor = subtle;
+            checkBoxRestoreBackupBefore.ForeColor = subtle;
 
             labelTitle.Font = new Font("Bahnschrift SemiBold", 18F);
             labelSubtitle.Font = new Font("Bahnschrift", 11F);
@@ -594,6 +700,7 @@ namespace BackupTool
             ApplyThemeToSecondaryButton(buttonModeBackup, cardBorder, text);
             ApplyThemeToSecondaryButton(buttonModeRestore, cardBorder, text);
             ApplyThemeToSecondaryButton(buttonCheckUpdates, cardBorder, text);
+            ApplyThemeToSecondaryButton(buttonRestoreSelectAll, cardBorder, text);
 
             ApplyRoundedCorners(flowPrograms, 10);
             ApplyRoundedCorners(buttonBack, 10);
@@ -603,9 +710,11 @@ namespace BackupTool
             ApplyRoundedCorners(buttonModeBackup, 10);
             ApplyRoundedCorners(buttonModeRestore, 10);
             ApplyRoundedCorners(buttonCheckUpdates, 10);
+            ApplyRoundedCorners(buttonRestoreSelectAll, 10);
 
             UpdateModeButtonStyles();
             UpdateProgramButtons();
+            UpdateRestoreProgramButtons();
         }
 
         private static void ApplyThemeToPrimaryButton(Button button, Color accent)
@@ -693,6 +802,208 @@ namespace BackupTool
             UpdateProgramButtons();
         }
 
+        private void LoadRestoreBackups()
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(LoadRestoreBackups));
+                return;
+            }
+
+            listBoxRestoreBackups.Items.Clear();
+            flowRestorePrograms.Controls.Clear();
+            _restoreProgramSelection.Clear();
+            _restoreFolderMap.Clear();
+            _selectedRestoreZip = string.Empty;
+            _restoreConfig = null;
+
+            if (!TryGetBackupRootPath(out var backupRoot))
+            {
+                listBoxRestoreBackups.Items.Add("Kein Backup-Ordner gefunden.");
+                listBoxRestoreBackups.Enabled = false;
+                return;
+            }
+
+            if (!Directory.Exists(backupRoot))
+            {
+                listBoxRestoreBackups.Items.Add("Backup-Ordner existiert nicht.");
+                listBoxRestoreBackups.Enabled = false;
+                return;
+            }
+
+            var backups = Directory.EnumerateFiles(backupRoot, "Backuptool_by_froessel_*.zip")
+                .Concat(Directory.EnumerateFiles(backupRoot, "Backuptool_restore_before_*.zip"))
+                .Select(path => new FileInfo(path))
+                .OrderByDescending(info => info.LastWriteTime)
+                .ToList();
+
+            if (backups.Count == 0)
+            {
+                listBoxRestoreBackups.Items.Add("Keine Backups gefunden.");
+                listBoxRestoreBackups.Enabled = false;
+                return;
+            }
+
+            listBoxRestoreBackups.Enabled = true;
+            foreach (var info in backups)
+            {
+                listBoxRestoreBackups.Items.Add(new BackupItem(info.FullName, FormatBackupDisplay(info)));
+            }
+
+            listBoxRestoreBackups.SelectedIndex = 0;
+        }
+
+        private void listBoxRestoreBackups_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (listBoxRestoreBackups.SelectedItem is not BackupItem item)
+                return;
+
+            _selectedRestoreZip = item.Path;
+            if (IsPreBackupZip(_selectedRestoreZip))
+            {
+                checkBoxRestoreBackupBefore.Checked = false;
+                checkBoxRestoreBackupBefore.Enabled = false;
+            }
+            else
+            {
+                checkBoxRestoreBackupBefore.Enabled = true;
+                checkBoxRestoreBackupBefore.Checked = true;
+            }
+            LoadRestoreProgramsFromZip(item.Path);
+        }
+
+        private void listBoxRestoreBackups_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            e.DrawBackground();
+            if (e.Index < 0 || e.Index >= listBoxRestoreBackups.Items.Count)
+                return;
+
+            var text = listBoxRestoreBackups.Items[e.Index]?.ToString() ?? string.Empty;
+            var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            var bg = isSelected ? Color.FromArgb(70, 72, 86) : listBoxRestoreBackups.BackColor;
+            var fg = isSelected ? Color.White : _textColor;
+
+            using var bgBrush = new SolidBrush(bg);
+            using var fgBrush = new SolidBrush(fg);
+            e.Graphics.FillRectangle(bgBrush, e.Bounds);
+            TextRenderer.DrawText(e.Graphics, text, listBoxRestoreBackups.Font, e.Bounds, fg, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+            e.DrawFocusRectangle();
+        }
+
+        private void LoadRestoreProgramsFromZip(string zipPath)
+        {
+            flowRestorePrograms.Controls.Clear();
+            _restoreProgramSelection.Clear();
+            _restoreFolderMap.Clear();
+            _restoreConfig = null;
+
+            if (!File.Exists(zipPath))
+            {
+                flowRestorePrograms.Controls.Add(CreateInfoLabel("Backup-ZIP nicht gefunden."));
+                return;
+            }
+
+            var config = TryLoadConfigFromZip(zipPath) ?? (ConfigLoader.TryLoad(_configPath, out var loadedConfig, out _) ? loadedConfig : null);
+            if (config == null)
+            {
+                flowRestorePrograms.Controls.Add(CreateInfoLabel("Config konnte nicht gelesen werden."));
+                return;
+            }
+            _restoreConfig = config;
+
+            var programMap = new Dictionary<string, ProgramEntry>(StringComparer.OrdinalIgnoreCase);
+            foreach (var program in config.ProgramsToBackup)
+            {
+                var name = program.Name ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    programMap[name] = program;
+                    var sanitized = SanitizeName(name);
+                    if (!programMap.ContainsKey(sanitized))
+                        programMap[sanitized] = program;
+                }
+            }
+
+            var folders = GetBackupFolders(zipPath);
+            if (folders.Count == 0)
+            {
+                flowRestorePrograms.Controls.Add(CreateInfoLabel("Keine Programme im Backup gefunden."));
+                return;
+            }
+
+            foreach (var folder in folders)
+            {
+                programMap.TryGetValue(folder, out var program);
+                var displayName = program?.Name ?? folder;
+                var selectable = program != null && !string.IsNullOrWhiteSpace(program.Path);
+
+            _restoreProgramSelection[folder] = false;
+            if (program != null)
+                _restoreFolderMap[folder] = program;
+
+                var btn = new Button
+                {
+                    Text = selectable ? displayName : displayName + " (kein Pfad in config)",
+                    Tag = folder,
+                    Width = 300,
+                    Height = 64,
+                    Margin = new Padding(8),
+                    Enabled = selectable
+                };
+                btn.Click += RestoreProgramToggle_Click;
+                flowRestorePrograms.Controls.Add(btn);
+            }
+
+            UpdateRestoreProgramButtons();
+        }
+
+        private void RestoreProgramToggle_Click(object? sender, EventArgs e)
+        {
+            if (sender is not Button btn || btn.Tag is not string key)
+                return;
+
+            if (_restoreProgramSelection.ContainsKey(key))
+                _restoreProgramSelection[key] = !_restoreProgramSelection[key];
+
+            UpdateRestoreProgramButtons();
+        }
+
+        private void UpdateRestoreProgramButtons()
+        {
+            foreach (Control control in flowRestorePrograms.Controls)
+            {
+                if (control is Button btn && btn.Tag is string key)
+                {
+                    var selected = _restoreProgramSelection.TryGetValue(key, out var isSelected) && isSelected;
+                    if (selected)
+                        ApplyThemeToPrimaryButton(btn, _accentColor);
+                    else
+                        ApplyThemeToSecondaryButton(btn, _cardBorderColor, _textColor);
+                    ApplyRoundedCorners(btn, 10);
+                }
+                else if (control is Label lbl)
+                {
+                    lbl.ForeColor = _subtleTextColor;
+                }
+            }
+
+            if (_restoreProgramSelection.Count > 0)
+                buttonRestoreSelectAll.Text = _restoreProgramSelection.Values.All(v => v) ? "Alle abwählen" : "Alle auswählen";
+        }
+
+        private void buttonRestoreSelectAll_Click(object sender, EventArgs e)
+        {
+            if (_restoreProgramSelection.Count == 0)
+                return;
+
+            var selectAll = _restoreProgramSelection.Values.Any(v => !v);
+            var keys = _restoreProgramSelection.Keys.ToList();
+            foreach (var key in keys)
+                _restoreProgramSelection[key] = selectAll;
+
+            UpdateRestoreProgramButtons();
+        }
+
         private void ProgramToggle_Click(object? sender, EventArgs e)
         {
             if (sender is not Button btn || btn.Tag is not string key)
@@ -746,15 +1057,28 @@ namespace BackupTool
         {
             _isBackupMode = isBackup;
             labelSubtitle.Text = _isBackupMode
-                ? "Backup-Modus: Programme sichern (Restore folgt später)"
-                : "Restore-Modus: Platzhalter (kommt bald)";
+                ? "Backup-Modus: Programme sichern"
+                : "Restore-Modus: Backup wiederherstellen";
             labelStep3.Text = _isBackupMode
                 ? "Schritt 3: Backup durchführen"
-                : "Schritt 3: Restore (Platzhalter)";
+                : "Schritt 3: Restore durchführen";
+            labelStep2.Text = _isBackupMode
+                ? "Schritt 2: Programme auswählen"
+                : "Schritt 2: Backup & Programme auswählen";
+            labelStep2Desc.Text = _isBackupMode
+                ? "Wähle die Programme, die du im aktuellen Lauf sichern möchtest."
+                : "Wähle zuerst ein Backup aus und dann die Programme, die du restaurieren möchtest.";
+            buttonBackup.Text = _isBackupMode ? "Start" : "Restore starten";
+            labelRestoreWarning.Text = "Hinweis: Beim Restore werden Dateien überschrieben. Bitte vorher prüfen.";
 
             UpdateModeButtonStyles();
             UpdateStep2Mode();
             UpdateActionButtons();
+            if (!_isBackupMode)
+            {
+                checkBoxRestoreBackupBefore.Checked = true;
+                LoadRestoreBackups();
+            }
         }
 
         private void UpdateModeButtonStyles()
@@ -781,6 +1105,153 @@ namespace BackupTool
                     selected.Add(program);
             }
             return selected;
+        }
+
+        private List<RestoreSelection> GetSelectedRestorePrograms()
+        {
+            var selections = new List<RestoreSelection>();
+            foreach (var (folder, isSelected) in _restoreProgramSelection)
+            {
+                if (!isSelected)
+                    continue;
+                if (_restoreFolderMap.TryGetValue(folder, out var program))
+                    selections.Add(new RestoreSelection(folder, program));
+            }
+            return selections;
+        }
+
+        private BackupConfig? TryLoadConfigFromZip(string zipPath)
+        {
+            try
+            {
+                using var archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
+                var entry = archive.GetEntry("config.json") ?? archive.GetEntry("backup_config.json");
+                if (entry == null)
+                    return null;
+
+                using var stream = entry.Open();
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+                var json = reader.ReadToEnd();
+                return ConfigLoader.TryParse(json, out var config, out _) ? config : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private bool TryGetBackupRootPath(out string backupRoot)
+        {
+            backupRoot = string.Empty;
+            if (ConfigLoader.TryLoad(_configPath, out var config, out _)
+                && !string.IsNullOrWhiteSpace(config.BackupRootPath))
+            {
+                backupRoot = Environment.ExpandEnvironmentVariables(config.BackupRootPath);
+            }
+            else if (!string.IsNullOrWhiteSpace(_backupRootPath))
+            {
+                backupRoot = _backupRootPath;
+            }
+
+            return !string.IsNullOrWhiteSpace(backupRoot);
+        }
+
+        private static List<string> GetBackupFolders(string zipPath)
+        {
+            var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using var archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
+            foreach (var entry in archive.Entries)
+            {
+                var full = entry.FullName.Replace('\\', '/');
+                if (!full.Contains('/'))
+                    continue;
+                var parts = full.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                    folders.Add(parts[0]);
+            }
+            return folders.OrderBy(f => f).ToList();
+        }
+
+        private static string SanitizeName(string name)
+        {
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var builder = new StringBuilder(name.Length);
+            foreach (var ch in name)
+            {
+                builder.Append(Array.IndexOf(invalidChars, ch) >= 0 ? '-' : ch);
+            }
+            return builder.ToString();
+        }
+
+        private static string FormatBackupDisplay(FileInfo info)
+        {
+            var name = Path.GetFileNameWithoutExtension(info.Name);
+            var prefix = "Backuptool_by_froessel_";
+            var restorePrefix = "Backuptool_restore_before_";
+            if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var stamp = name.Substring(prefix.Length);
+                if (DateTime.TryParseExact(stamp, "yyyy-MM-dd_HH-mm-ss", null, System.Globalization.DateTimeStyles.None, out var parsed))
+                {
+                    return $"{parsed:dd.MM.yyyy HH:mm} - {info.Name}";
+                }
+            }
+            if (name.StartsWith(restorePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var stamp = name.Substring(restorePrefix.Length);
+                if (DateTime.TryParseExact(stamp, "yyyy-MM-dd_HH-mm-ss", null, System.Globalization.DateTimeStyles.None, out var parsed))
+                {
+                    return $"Pre-Backup {parsed:dd.MM.yyyy HH:mm} - {info.Name}";
+                }
+            }
+            return $"{info.LastWriteTime:dd.MM.yyyy HH:mm} - {info.Name}";
+        }
+
+        private void WriteRestoreSummary(int successCount, int totalPrograms, List<string> failedPrograms, string? preBackupPath, string? preBackupZipPath)
+        {
+            if (_hasError)
+                WriteLog("Restore abgebrochen.", "ERROR");
+            else if (successCount == totalPrograms)
+                WriteLog("Restore abgeschlossen.", "SUCCESS");
+            else if (successCount > 0)
+                WriteLog("Restore teilweise abgeschlossen.", "WARNING");
+            else
+                WriteLog("Restore fehlgeschlagen.", "ERROR");
+
+            WriteLog($"Ergebnis: {successCount}/{totalPrograms} Programme restauriert.", "INFO");
+
+            if (failedPrograms.Count > 0)
+                WriteLog($"Fehlgeschlagen: {string.Join(", ", failedPrograms)}", "WARNING");
+
+            if (!string.IsNullOrWhiteSpace(preBackupPath))
+                WriteLog($"Pre-Backup: {preBackupPath}", "SUCCESS");
+            if (!string.IsNullOrWhiteSpace(preBackupZipPath))
+                WriteLog($"Pre-Backup ZIP: {preBackupZipPath}", "SUCCESS");
+
+            WriteLog("QUACK!", "INFO");
+        }
+
+        private static bool IsPreBackupZip(string path)
+        {
+            var file = Path.GetFileName(path);
+            return file.StartsWith("Backuptool_restore_before_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private sealed class BackupItem
+        {
+            public string Path { get; }
+            private string Display { get; }
+
+            public BackupItem(string path, string display)
+            {
+                Path = path;
+                Display = display;
+            }
+
+            public override string ToString()
+            {
+                return Display;
+            }
         }
 
     }

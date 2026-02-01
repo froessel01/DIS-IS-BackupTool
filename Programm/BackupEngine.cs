@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Text.Json;
 
 namespace BackupTool
 {
@@ -59,6 +60,8 @@ namespace BackupTool
                 result.Aborted = true;
                 return result;
             }
+
+            WriteBackupConfig(backupPath, config, log);
 
             log("Backup gestartet.", "INFO");
             log($"Ziel: {backupPath}", "INFO");
@@ -364,6 +367,21 @@ namespace BackupTool
                 log($"[FEHLER] Fehler beim Komprimieren: {ex.Message}", "ERROR");
                 log($"  Backup-Ordner bleibt erhalten: {backupPath}", "WARNING");
                 return false;
+            }
+        }
+
+        private static void WriteBackupConfig(string backupPath, BackupConfig config, Action<string, string> log)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+                var configPath = Path.Combine(backupPath, "config.json");
+                File.WriteAllText(configPath, json, Encoding.UTF8);
+                log("config.json im Backup gespeichert.", "INFO");
+            }
+            catch (Exception ex)
+            {
+                log($"Warnung: config.json konnte nicht im Backup gespeichert werden: {ex.Message}", "WARNING");
             }
         }
 

@@ -32,6 +32,13 @@ namespace BackupTool
         private FlowLayoutPanel flowPrograms;
         private Button buttonSelectAll;
         private Label labelRestorePlaceholder;
+        private Label labelRestoreBackups;
+        private ListBox listBoxRestoreBackups;
+        private Label labelRestorePrograms;
+        private FlowLayoutPanel flowRestorePrograms;
+        private Button buttonRestoreSelectAll;
+        private CheckBox checkBoxRestoreBackupBefore;
+        private Label labelRestoreWarning;
         private ProgressBar progressBar;
         private Label labelStatus;
         private RichTextBox textBoxLog;
@@ -84,6 +91,13 @@ namespace BackupTool
             this.flowPrograms = new FlowLayoutPanel();
             this.buttonSelectAll = new Button();
             this.labelRestorePlaceholder = new Label();
+            this.labelRestoreBackups = new Label();
+            this.listBoxRestoreBackups = new ListBox();
+            this.labelRestorePrograms = new Label();
+            this.flowRestorePrograms = new FlowLayoutPanel();
+            this.buttonRestoreSelectAll = new Button();
+            this.checkBoxRestoreBackupBefore = new CheckBox();
+            this.labelRestoreWarning = new Label();
             this.progressBar = new ProgressBar();
             this.labelStatus = new Label();
             this.textBoxLog = new RichTextBox();
@@ -285,6 +299,13 @@ namespace BackupTool
             this.panelStep2.Controls.Add(this.flowPrograms);
             this.panelStep2.Controls.Add(this.buttonSelectAll);
             this.panelStep2.Controls.Add(this.labelRestorePlaceholder);
+            this.panelStep2.Controls.Add(this.labelRestoreBackups);
+            this.panelStep2.Controls.Add(this.listBoxRestoreBackups);
+            this.panelStep2.Controls.Add(this.labelRestorePrograms);
+            this.panelStep2.Controls.Add(this.flowRestorePrograms);
+            this.panelStep2.Controls.Add(this.buttonRestoreSelectAll);
+            this.panelStep2.Controls.Add(this.checkBoxRestoreBackupBefore);
+            this.panelStep2.Controls.Add(this.labelRestoreWarning);
             this.panelStep2.Location = new System.Drawing.Point(16, 16);
             this.panelStep2.Name = "panelStep2";
             this.panelStep2.Size = new System.Drawing.Size(1028, 460);
@@ -346,6 +367,77 @@ namespace BackupTool
             this.labelRestorePlaceholder.Size = new System.Drawing.Size(364, 17);
             this.labelRestorePlaceholder.TabIndex = 4;
             this.labelRestorePlaceholder.Text = "Restore ist noch nicht implementiert. (Platzhalter-Ansicht)";
+            // 
+            // labelRestoreBackups
+            // 
+            this.labelRestoreBackups.AutoSize = true;
+            this.labelRestoreBackups.Location = new System.Drawing.Point(12, 70);
+            this.labelRestoreBackups.Name = "labelRestoreBackups";
+            this.labelRestoreBackups.Size = new System.Drawing.Size(149, 17);
+            this.labelRestoreBackups.TabIndex = 5;
+            this.labelRestoreBackups.Text = "Backups (ZIP-Dateien)";
+            // 
+            // listBoxRestoreBackups
+            // 
+            this.listBoxRestoreBackups.DrawMode = DrawMode.OwnerDrawFixed;
+            this.listBoxRestoreBackups.FormattingEnabled = true;
+            this.listBoxRestoreBackups.ItemHeight = 17;
+            this.listBoxRestoreBackups.Location = new System.Drawing.Point(12, 96);
+            this.listBoxRestoreBackups.Name = "listBoxRestoreBackups";
+            this.listBoxRestoreBackups.Size = new System.Drawing.Size(1000, 140);
+            this.listBoxRestoreBackups.TabIndex = 6;
+            this.listBoxRestoreBackups.SelectedIndexChanged += new System.EventHandler(this.listBoxRestoreBackups_SelectedIndexChanged);
+            this.listBoxRestoreBackups.DrawItem += new DrawItemEventHandler(this.listBoxRestoreBackups_DrawItem);
+            // 
+            // labelRestorePrograms
+            // 
+            this.labelRestorePrograms.AutoSize = true;
+            this.labelRestorePrograms.Location = new System.Drawing.Point(12, 244);
+            this.labelRestorePrograms.Name = "labelRestorePrograms";
+            this.labelRestorePrograms.Size = new System.Drawing.Size(153, 17);
+            this.labelRestorePrograms.TabIndex = 7;
+            this.labelRestorePrograms.Text = "Programme im Backup";
+            // 
+            // flowRestorePrograms
+            // 
+            this.flowRestorePrograms.AutoScroll = true;
+            this.flowRestorePrograms.FlowDirection = FlowDirection.LeftToRight;
+            this.flowRestorePrograms.Location = new System.Drawing.Point(12, 270);
+            this.flowRestorePrograms.Name = "flowRestorePrograms";
+            this.flowRestorePrograms.Size = new System.Drawing.Size(1000, 150);
+            this.flowRestorePrograms.TabIndex = 8;
+            this.flowRestorePrograms.WrapContents = true;
+            // 
+            // buttonRestoreSelectAll
+            // 
+            this.buttonRestoreSelectAll.Location = new System.Drawing.Point(12, 430);
+            this.buttonRestoreSelectAll.Name = "buttonRestoreSelectAll";
+            this.buttonRestoreSelectAll.Size = new System.Drawing.Size(320, 36);
+            this.buttonRestoreSelectAll.TabIndex = 9;
+            this.buttonRestoreSelectAll.Text = "Alle auswählen";
+            this.toolTip.SetToolTip(this.buttonRestoreSelectAll, "Alle Programme auswählen oder abwählen");
+            this.buttonRestoreSelectAll.UseVisualStyleBackColor = true;
+            this.buttonRestoreSelectAll.Click += new System.EventHandler(this.buttonRestoreSelectAll_Click);
+            // 
+            // checkBoxRestoreBackupBefore
+            // 
+            this.checkBoxRestoreBackupBefore.AutoSize = true;
+            this.checkBoxRestoreBackupBefore.Location = new System.Drawing.Point(350, 436);
+            this.checkBoxRestoreBackupBefore.Name = "checkBoxRestoreBackupBefore";
+            this.checkBoxRestoreBackupBefore.Size = new System.Drawing.Size(358, 21);
+            this.checkBoxRestoreBackupBefore.TabIndex = 10;
+            this.checkBoxRestoreBackupBefore.Text = "Vorher Backup der bestehenden Daten erstellen";
+            this.checkBoxRestoreBackupBefore.UseVisualStyleBackColor = true;
+            this.checkBoxRestoreBackupBefore.Checked = true;
+            // 
+            // labelRestoreWarning
+            // 
+            this.labelRestoreWarning.AutoSize = true;
+            this.labelRestoreWarning.Location = new System.Drawing.Point(12, 52);
+            this.labelRestoreWarning.Name = "labelRestoreWarning";
+            this.labelRestoreWarning.Size = new System.Drawing.Size(474, 17);
+            this.labelRestoreWarning.TabIndex = 11;
+            this.labelRestoreWarning.Text = "Hinweis: Beim Restore werden Dateien überschrieben. Bitte vorher prüfen.";
             // 
             // panelStep3
             // 
