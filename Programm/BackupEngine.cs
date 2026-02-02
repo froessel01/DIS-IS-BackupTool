@@ -16,6 +16,7 @@ namespace BackupTool
         public int SuccessCount { get; set; }
         public int TotalPrograms { get; set; }
         public List<string> FailedPrograms { get; set; } = new();
+        public bool Cancelled { get; set; }
     }
 
     public static class BackupEngine
@@ -25,7 +26,8 @@ namespace BackupTool
             IReadOnlyList<ProgramEntry> programs,
             Action<string, string> log,
             Action<int> setProgressMax,
-            Action incrementProgress)
+            Action incrementProgress,
+            Func<bool> isCancelled)
         {
             var result = new BackupRunResult
             {
@@ -69,11 +71,21 @@ namespace BackupTool
             var successCount = 0;
             var failedPrograms = new List<string>();
 
-            setProgressMax(programs.Count);
+            setProgressMax(programs.Count + 1);
             log($"Starte Sicherung von {programs.Count} Programmen.", "INFO");
 
             foreach (var program in programs)
             {
+                if (isCancelled())
+                {
+                    log("Backup abgebrochen.", "WARNING");
+                    result.Cancelled = true;
+                    result.Aborted = true;
+                    result.SuccessCount = successCount;
+                    result.FailedPrograms = failedPrograms;
+                    return result;
+                }
+
                 var programName = program.Name ?? "(Unbekannt)";
                 string? foundPath = null;
 
@@ -175,8 +187,19 @@ namespace BackupTool
                 incrementProgress();
             }
 
+            if (isCancelled())
+            {
+                log("Backup abgebrochen.", "WARNING");
+                result.Cancelled = true;
+                result.Aborted = true;
+                result.SuccessCount = successCount;
+                result.FailedPrograms = failedPrograms;
+                return result;
+            }
+
             if (!CompressBackup(backupPath, zipPath, log))
             {
+                incrementProgress();
                 CleanupTempBackup(backupPath);
                 if (File.Exists(zipPath))
                 {
@@ -196,6 +219,7 @@ namespace BackupTool
                 return result;
             }
 
+            incrementProgress();
             result.Aborted = false;
             result.SuccessCount = successCount;
             result.FailedPrograms = failedPrograms;

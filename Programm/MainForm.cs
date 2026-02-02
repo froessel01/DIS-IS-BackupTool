@@ -36,6 +36,13 @@ namespace BackupTool
         private Color _subtleTextColor = Color.FromArgb(170, 170, 180);
         private AppSettings _settings = new();
         private string _settingsPath = string.Empty;
+        private bool _runInProgress = false;
+        private bool _cancelRequested = false;
+        private Stopwatch? _runStopwatch;
+        private int _runTotalSteps = 0;
+        private string _lastStatusMessage = "Bereit";
+        private string _lastStatusLevel = "INFO";
+        private string _lastEtaText = string.Empty;
 
         public MainForm()
         {
@@ -59,6 +66,13 @@ namespace BackupTool
 
         private async void buttonBackup_Click(object sender, EventArgs e)
         {
+            _runInProgress = true;
+            _cancelRequested = false;
+            _runStopwatch = Stopwatch.StartNew();
+            _runTotalSteps = 0;
+            _lastEtaText = string.Empty;
+            SetRunButtonsEnabled(false);
+            buttonCancel.Enabled = true;
             buttonBackup.Enabled = false;
             progressBar.Value = 0;
             textBoxLog.Clear();
@@ -76,6 +90,12 @@ namespace BackupTool
                 }
             });
 
+            _runInProgress = false;
+            _runStopwatch?.Stop();
+            _lastEtaText = string.Empty;
+            ApplyStatusText();
+            SetRunButtonsEnabled(true);
+            buttonCancel.Enabled = false;
             buttonBackup.Enabled = true;
         }
 
@@ -130,7 +150,8 @@ namespace BackupTool
                 selectedPrograms,
                 WriteLog,
                 SetProgressMaximum,
-                IncrementProgress);
+                IncrementProgress,
+                () => _cancelRequested);
 
             _backupRootPath = result.BackupRootPath ?? _backupRootPath;
             _backupPath = result.BackupPath ?? _backupPath;
@@ -139,7 +160,8 @@ namespace BackupTool
             if (result.Aborted)
             {
                 ResetProgress();
-                ShowError("Backup abgebrochen, weil ein Fehler aufgetreten ist.");
+                if (!result.Cancelled)
+                    ShowError("Backup abgebrochen, weil ein Fehler aufgetreten ist.");
                 WriteSummary(result.SuccessCount, result.TotalPrograms, result.FailedPrograms);
                 return;
             }
@@ -212,7 +234,8 @@ namespace BackupTool
                 checkBoxRestoreBackupBefore.Checked,
                 WriteLog,
                 SetProgressMaximum,
-                IncrementProgress);
+                IncrementProgress,
+                () => _cancelRequested);
 
             _backupRootPath = Environment.ExpandEnvironmentVariables(config.BackupRootPath ?? _backupRootPath);
             _zipPath = _selectedRestoreZip;
@@ -220,7 +243,8 @@ namespace BackupTool
             if (result.Aborted)
             {
                 ResetProgress();
-                ShowError("Restore abgebrochen, weil ein Fehler aufgetreten ist.");
+                if (!result.Cancelled)
+                    ShowError("Restore abgebrochen, weil ein Fehler aufgetreten ist.");
                 WriteRestoreSummary(result.SuccessCount, result.TotalPrograms, result.FailedPrograms, result.PreBackupPath, result.PreBackupZipPath);
                 BeginInvoke(new Action(LoadRestoreBackups));
                 return;
@@ -287,6 +311,7 @@ namespace BackupTool
 
             progressBar.Maximum = Math.Max(1, maximum);
             progressBar.Value = 0;
+            _runTotalSteps = progressBar.Maximum;
         }
 
         private void IncrementProgress()
@@ -299,6 +324,8 @@ namespace BackupTool
 
             if (progressBar.Value < progressBar.Maximum)
                 progressBar.Value += 1;
+
+            UpdateEta();
         }
 
         private void ResetProgress()
@@ -331,8 +358,64 @@ namespace BackupTool
                 return;
             }
 
-            labelStatus.Text = message;
-            labelStatus.ForeColor = GetStatusColor(level);
+            _lastStatusMessage = message;
+            _lastStatusLevel = level;
+            ApplyStatusText();
+        }
+
+        private void ApplyStatusText()
+        {
+            if (labelStatus.InvokeRequired)
+            {
+                labelStatus.BeginInvoke(new Action(ApplyStatusText));
+                return;
+            }
+
+            var text = _lastStatusMessage;
+            if (_runInProgress && !string.IsNullOrWhiteSpace(_lastEtaText))
+                text += $" | ETA: {_lastEtaText}";
+            labelStatus.Text = text;
+            labelStatus.ForeColor = GetStatusColor(_lastStatusLevel);
+        }
+
+        private void UpdateEta()
+        {
+            if (!_runInProgress || _runStopwatch == null || _runTotalSteps <= 0)
+                return;
+
+            var done = progressBar.Value;
+            if (done <= 0)
+                return;
+
+            var elapsed = _runStopwatch.Elapsed;
+            var avgPerStep = TimeSpan.FromTicks(elapsed.Ticks / Math.Max(1, done));
+            var remainingSteps = Math.Max(0, _runTotalSteps - done);
+            var remaining = TimeSpan.FromTicks(avgPerStep.Ticks * remainingSteps);
+            _lastEtaText = remaining.TotalSeconds < 1 ? "<1s" : remaining.ToString(@"mm\:ss");
+            ApplyStatusText();
+        }
+
+        private void SetRunButtonsEnabled(bool enabled)
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action<bool>(SetRunButtonsEnabled), enabled);
+                return;
+            }
+
+            buttonBack.Enabled = enabled && _currentStep > 0;
+            buttonNext.Enabled = enabled && _currentStep < 2;
+            buttonModeBackup.Enabled = enabled;
+            buttonModeRestore.Enabled = enabled;
+        }
+
+        private void buttonCancel_Click(object sender, EventArgs e)
+        {
+            if (!_runInProgress)
+                return;
+            _cancelRequested = true;
+            buttonCancel.Enabled = false;
+            WriteLog("Abbruch angefordert...", "WARNING");
         }
 
         private Color GetStatusColor(string level)
@@ -701,6 +784,7 @@ namespace BackupTool
             ApplyThemeToSecondaryButton(buttonModeRestore, cardBorder, text);
             ApplyThemeToSecondaryButton(buttonCheckUpdates, cardBorder, text);
             ApplyThemeToSecondaryButton(buttonRestoreSelectAll, cardBorder, text);
+            ApplyThemeToSecondaryButton(buttonCancel, cardBorder, text);
 
             ApplyRoundedCorners(flowPrograms, 10);
             ApplyRoundedCorners(buttonBack, 10);
@@ -711,6 +795,7 @@ namespace BackupTool
             ApplyRoundedCorners(buttonModeRestore, 10);
             ApplyRoundedCorners(buttonCheckUpdates, 10);
             ApplyRoundedCorners(buttonRestoreSelectAll, 10);
+            ApplyRoundedCorners(buttonCancel, 10);
 
             UpdateModeButtonStyles();
             UpdateProgramButtons();

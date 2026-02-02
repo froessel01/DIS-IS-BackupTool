@@ -1,5 +1,5 @@
 ﻿{
-    "url":  "https://github.com/froessel01/DIS-IS-BackupTool/releases/download/v0.2.0/BackupTool.exe",
-    "version":  "0.2.0.0",
-    "notes":  "Experimentelle Version: Restore-Modus mit Backup-Auswahl, Pre-Backup ZIP, config im Backup, UI-Fixes"
+    "url":  "https://github.com/froessel01/DIS-IS-BackupTool/releases/download/v0.2.2/BackupTool.exe",
+    "version":  "0.2.2.0",
+    "notes":  "Experimentelle Version: Abbrechen-Button, ETA im Status, Fortschritt bis ZIP, UI-Sperren"
 }

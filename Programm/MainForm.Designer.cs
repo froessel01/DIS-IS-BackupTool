@@ -50,6 +50,7 @@ namespace BackupTool
         private Button buttonBack;
         private Button buttonNext;
         private Button buttonBackup;
+        private Button buttonCancel;
         private ToolTip toolTip;
 
         protected override void Dispose(bool disposing)
@@ -109,6 +110,7 @@ namespace BackupTool
             this.buttonBack = new Button();
             this.buttonNext = new Button();
             this.buttonBackup = new Button();
+            this.buttonCancel = new Button();
             this.toolTip = new ToolTip(this.components);
             this.panelBanner.SuspendLayout();
             this.panelHeader.SuspendLayout();
@@ -217,6 +219,7 @@ namespace BackupTool
             this.panelWizard.Controls.Add(this.buttonBack);
             this.panelWizard.Controls.Add(this.buttonNext);
             this.panelWizard.Controls.Add(this.buttonBackup);
+            this.panelWizard.Controls.Add(this.buttonCancel);
             this.panelWizard.Location = new System.Drawing.Point(18, 216);
             this.panelWizard.Name = "panelWizard";
             this.panelWizard.Size = new System.Drawing.Size(1060, 540);
@@ -578,6 +581,16 @@ namespace BackupTool
             this.buttonBackup.Text = "Start";
             this.buttonBackup.UseVisualStyleBackColor = true;
             this.buttonBackup.Click += new System.EventHandler(this.buttonBackup_Click);
+            // 
+            // buttonCancel
+            // 
+            this.buttonCancel.Location = new System.Drawing.Point(738, 492);
+            this.buttonCancel.Name = "buttonCancel";
+            this.buttonCancel.Size = new System.Drawing.Size(150, 40);
+            this.buttonCancel.TabIndex = 6;
+            this.buttonCancel.Text = "Abbrechen";
+            this.buttonCancel.UseVisualStyleBackColor = true;
+            this.buttonCancel.Click += new System.EventHandler(this.buttonCancel_Click);
             // 
             // MainForm
             // 

@@ -4,7 +4,7 @@
     <AssemblyName>BackupTool</AssemblyName>
     <RootNamespace>BackupTool</RootNamespace>
     <ApplicationIcon>Assets\backup-icon.ico</ApplicationIcon>
-    <VersionPrefix>0.2.0</VersionPrefix>
+    <VersionPrefix>0.2.2</VersionPrefix>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>

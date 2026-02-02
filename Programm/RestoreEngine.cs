@@ -16,6 +16,7 @@ namespace BackupTool
         public string? PreBackupPath { get; set; }
         public string? PreBackupZipPath { get; set; }
         public List<string> FailedPrograms { get; set; } = new();
+        public bool Cancelled { get; set; }
     }
 
     public static class RestoreEngine
@@ -27,7 +28,8 @@ namespace BackupTool
             bool createPreBackup,
             Action<string, string> log,
             Action<int> setProgressMax,
-            Action incrementProgress)
+            Action incrementProgress,
+            Func<bool> isCancelled)
         {
             var result = new RestoreRunResult
             {
@@ -79,6 +81,16 @@ namespace BackupTool
 
             foreach (var selection in selections)
             {
+                if (isCancelled())
+                {
+                    log("Restore abgebrochen.", "WARNING");
+                    result.Cancelled = true;
+                    result.Aborted = true;
+                    result.SuccessCount = successCount;
+                    result.FailedPrograms = failed;
+                    return result;
+                }
+
                 var program = selection.Program;
                 var programName = program.Name ?? selection.FolderName;
                 log($"Restore: {programName}", "INFO");
